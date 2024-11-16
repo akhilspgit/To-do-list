@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>To-Do List</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+
+        .container {
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+            width: 400px;
+            text-align: center;
+        }
+
+        h1 {
+            font-size: 24px;
+            margin-bottom: 20px;
+        }
+
+        #todoInput {
+            width: 80%;
+            padding: 10px;
+            margin-bottom: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+
+        #dueDateInput {
+            width: 80%;
+            padding: 10px;
+            margin-bottom: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+
+        #addButton {
+            padding: 10px 15px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        #addButton:hover {
+            background-color: #45a049;
+        }
+
+        ul {
+            list-style-type: none;
+            padding: 0;
+        }
+
+        li {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            margin: 5px 0;
+            background-color: #f9f9f9;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        }
+
+        li button {
+            background-color: #e74c3c;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        li button:hover {
+            background-color: #c0392b;
+        }
+
+        .edit-button {
+            background-color: #3498db;
+        }
+
+        .edit-button:hover {
+            background-color: #2980b9;
+        }
+
+        .edit-input {
+            width: 80%;
+            padding: 5px;
+            margin-right: 10px;
+            border-radius: 5px;
+        }
+
+        .countdown {
+            font-weight: bold;
+            color: #e67e22;
+        }
+
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>My To-Do List</h1>
+        <input type="text" id="todoInput" placeholder="Enter a new task..." />
+        <input type="datetime-local" id="dueDateInput" />
+        <button id="addButton">Add Task</button>
+        <ul id="todoList"></ul>
+    </div>
+
+    <script>
+        // Load tasks from localStorage when the page is loaded
+        window.onload = loadTasks;
+
+        document.getElementById('addButton').addEventListener('click', addTask);
+
+        // Add task to the list and localStorage
+        function addTask() {
+            const taskInput = document.getElementById('todoInput');
+            const dueDateInput = document.getElementById('dueDateInput');
+            const taskText = taskInput.value.trim();
+            const dueDate = new Date(dueDateInput.value);
+
+            if (taskText !== "" && !isNaN(dueDate)) {
+                const task = {
+                    id: new Date().toISOString(),
+                    text: taskText,
+                    dueDate: dueDate.toISOString() // Save the due date as ISO string
+                };
+
+                // Add the task to the list
+                const li = document.createElement('li');
+                li.dataset.id = task.id;
+                li.innerHTML = `
+                    <span>${taskText}</span> 
+                    <span class="countdown" id="countdown-${task.id}"></span>
+                    <button class="edit-button" onclick="editTask(this)">Edit</button>
+                    <button onclick="deleteTask(this)">Delete</button>
+                `;
+                document.getElementById('todoList').appendChild(li);
+
+                // Save to localStorage
+                saveTaskToLocalStorage(task);
+
+                taskInput.value = ''; // Clear input field
+                dueDateInput.value = ''; // Clear due date input
+                startCountdown(task); // Start countdown for this task
+            } else {
+                alert('Please enter a task and a valid due date!');
+            }
+        }
+
+        // Delete task from the list and localStorage
+        function deleteTask(button) {
+            const li = button.parentElement;
+            const taskId = li.dataset.id;
+
+            // Remove from UI
+            li.remove();
+
+            // Remove from localStorage
+            removeTaskFromLocalStorage(taskId);
+        }
+
+        // Edit task in the list
+        function editTask(button) {
+            const li = button.parentElement;
+            const taskId = li.dataset.id;
+            const taskText = li.querySelector('span').textContent;
+
+            // Replace task text with input field for editing
+            const inputField = document.createElement('input');
+            inputField.type = 'text';
+            inputField.value = taskText;
+            inputField.classList.add('edit-input');
+
+            const saveButton = document.createElement('button');
+            saveButton.textContent = 'Save';
+            saveButton.onclick = function() {
+                const newTaskText = inputField.value.trim();
+                if (newTaskText !== "") {
+                    // Update task text in UI
+                    li.innerHTML = `
+                        <span>${newTaskText}</span>
+                        <span class="countdown" id="countdown-${taskId}"></span>
+                        <button class="edit-button" onclick="editTask(this)">Edit</button>
+                        <button onclick="deleteTask(this)">Delete</button>
+                    `;
+                    li.dataset.id = taskId;  // Maintain task ID after edit
+
+                    // Update task in localStorage
+                    updateTaskInLocalStorage(taskId, newTaskText);
+                } else {
+                    alert('Task cannot be empty!');
+                }
+            };
+
+            li.innerHTML = ''; // Clear existing task content
+            li.appendChild(inputField);
+            li.appendChild(saveButton);
+        }
+
+        // Save task to localStorage
+        function saveTaskToLocalStorage(task) {
+            const tasks = getTasksFromLocalStorage();
+            tasks.push(task);
+            localStorage.setItem('tasks', JSON.stringify(tasks));
+        }
+
+        // Remove task from localStorage
+        function removeTaskFromLocalStorage(taskId) {
+            let tasks = getTasksFromLocalStorage();
+            tasks = tasks.filter(task => task.id !== taskId);
+            localStorage.setItem('tasks', JSON.stringify(tasks));
+        }
+
+        // Update task in localStorage
+        function updateTaskInLocalStorage(taskId, newTaskText) {
+            let tasks = getTasksFromLocalStorage();
+            tasks = tasks.map(task => {
+                if (task.id === taskId) {
+                    task.text = newTaskText;
+                }
+                return task;
+            });
+            localStorage.setItem('tasks', JSON.stringify(tasks));
+        }
+
+        // Load tasks from localStorage
+        function loadTasks() {
+            const tasks = getTasksFromLocalStorage();
+            tasks.forEach(task => {
+                const li = document.createElement('li');
+                li.dataset.id = task.id;
+                li.innerHTML = `
+                    <span>${task.text}</span>
+                    <span class="countdown" id="countdown-${task.id}"></span>
+                    <button class="edit-button" onclick="editTask(this)">Edit</button>
+                    <button onclick="deleteTask(this)">Delete</button>
+                `;
+                document.getElementById('todoList').appendChild(li);
+
+                // Start countdown for each task
+                startCountdown(task);
+            });
+        }
+
+        // Get tasks from localStorage
+        function getTasksFromLocalStorage() {
+            const tasks = localStorage.getItem('tasks');
+            return tasks ? JSON.parse(tasks) : [];
+        }
+
+        // Start the countdown for a given task
+        function startCountdown(task) {
+            const countdownElement = document.getElementById(`countdown-${task.id}`);
+            const endTime = new Date(task.dueDate).getTime();
+
+            const interval = setInterval(function() {
+                const now = new Date().getTime();
+                const distance = endTime - now;
+
+                // Time calculations
+                const days = Math.floor(distance / (1000 * 60 * 60 * 24));
+                const hours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+                const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
+                const seconds = Math.floor((distance % (1000 * 60)) / 1000);
+
+                if (distance < 0) {
+                    clearInterval(interval);
+                    countdownElement.innerHTML = "EXPIRED";
+                } else {
+                    countdownElement.innerHTML = `${days}d ${hours}h ${minutes}m ${seconds}s`;
+                }
+            }, 1000);
+        }
+    </script>
+
+</body>
+</html>
